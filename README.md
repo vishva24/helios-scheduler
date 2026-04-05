@@ -98,6 +98,8 @@ helios-scheduler/
 └── README.md
 ```
 
+> **To run:** start `backend/main.py` with uvicorn, then open `frontend/index.html` directly in your browser.
+
 ---
 
 ## Stack
