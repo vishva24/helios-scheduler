@@ -60,15 +60,9 @@ A full-stack prototype of a **pull-based GPU task scheduler** designed for decen
 
 ---
 
-## Task Types
+## Simulated Task Types
 
-| Type | Min VRAM | Avg Latency |
-|---|---|---|
-| text-generation | 8 GB | ~4s |
-| summarization | 6 GB | ~3s |
-| reranking | 2 GB | ~1.2s |
-| embedding | 2 GB | ~0.8s |
-| classification | 1 GB | ~0.5s |
+The scheduler supports five task categories: `text-generation`, `summarization`, `reranking`, `embedding`, and `classification`. Each has configurable VRAM requirements and simulated latency values used for demonstration purposes — these are not claims about real model performance, which varies by model size, quantization, and hardware.
 
 ---
 
