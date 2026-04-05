@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Helios — Compute Scheduler</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #080c10;
+    --surface:  #0d1117;
+    --panel:    #111820;
+    --border:   #1e2d3d;
+    --accent:   #00e5ff;
+    --green:    #00ff9d;
+    --yellow:   #ffd600;
+    --red:      #ff3d57;
+    --text:     #c8d8e8;
+    --muted:    #4a6070;
+    --font-ui:  'Syne', sans-serif;
+    --font-mono:'Space Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* grid background */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none; z-index:0;
+  }
+
+  #app { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:24px; }
+
+  /* ── Header ── */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--border);
+    padding-bottom:20px; margin-bottom:28px;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-mark {
+    width:36px; height:36px; border:2px solid var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:800; color:var(--accent);
+    font-family:var(--font-mono);
+    position:relative;
+    animation: pulse-border 3s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%,100% { box-shadow: 0 0 0 0 rgba(0,229,255,0.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(0,229,255,0); }
+  }
+  .logo-text { font-size:20px; font-weight:800; letter-spacing:0.05em; }
+  .logo-text span { color:var(--accent); }
+  .header-status { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+  .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:blink 1.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+  /* ── Stats Row ── */
+  .stats-row { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:24px; }
+  .stat-card {
+    background:var(--panel); border:1px solid var(--border);
+    padding:16px 18px; position:relative; overflow:hidden;
+  }
+  .stat-card::after {
+    content:''; position:absolute; bottom:0; left:0; right:0;
+    height:2px; background:var(--accent); transform:scaleX(0);
+    transform-origin:left; transition:transform 0.4s ease;
+  }
+  .stat-card:hover::after { transform:scaleX(1); }
+  .stat-label { font-size:10px; font-family:var(--font-mono); color:var(--muted); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:8px; }
+  .stat-value { font-size:28px; font-weight:800; line-height:1; }
+  .stat-value.accent { color:var(--accent); }
+  .stat-value.green  { color:var(--green); }
+  .stat-value.yellow { color:var(--yellow); }
+  .stat-value.red    { color:var(--red); }
+
+  /* ── Main Grid ── */
+  .main-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  .full-width { grid-column:1/-1; }
+
+  /* ── Panel ── */
+  .panel {
+    background:var(--panel); border:1px solid var(--border);
+    display:flex; flex-direction:column;
+  }
+  .panel-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--border);
+  }
+  .panel-title { font-size:11px; font-family:var(--font-mono); color:var(--muted); letter-spacing:0.12em; text-transform:uppercase; }
+  .panel-body { padding:16px 18px; flex:1; }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family:var(--font-mono); font-size:11px; font-weight:700;
+    padding:8px 16px; border:1px solid; cursor:pointer;
+    letter-spacing:0.08em; transition:all 0.15s; background:transparent;
+    text-transform:uppercase;
+  }
+  .btn-accent { border-color:var(--accent); color:var(--accent); }
+  .btn-accent:hover { background:var(--accent); color:var(--bg); }
+  .btn-green  { border-color:var(--green);  color:var(--green);  }
+  .btn-green:hover  { background:var(--green);  color:var(--bg); }
+  .btn-red    { border-color:var(--red);    color:var(--red);    }
+  .btn-red:hover    { background:var(--red);    color:#fff; }
+  .btn-sm { padding:5px 10px; font-size:10px; }
+
+  /* ── Forms ── */
+  .form-row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  input, select {
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-family:var(--font-mono); font-size:12px;
+    padding:7px 10px; outline:none;
+    transition:border-color 0.2s;
+  }
+  input:focus, select:focus { border-color:var(--accent); }
+  input::placeholder { color:var(--muted); }
+  select option { background:var(--surface); }
+  .checkbox-row { display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:11px; cursor:pointer; }
+  .checkbox-row input[type=checkbox] { width:14px; height:14px; accent-color:var(--green); }
+
+  /* ── Nodes Grid ── */
+  .nodes-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; }
+  .node-card {
+    background:var(--surface); border:1px solid var(--border);
+    padding:14px; position:relative; overflow:hidden;
+    transition:border-color 0.2s;
+  }
+  .node-card.busy   { border-color:var(--yellow); }
+  .node-card.idle   { border-color:var(--border); }
+  .node-card.offline{ border-color:var(--red); opacity:0.6; }
+  .node-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    transition:background 0.3s;
+  }
+  .node-card.busy::before   { background:var(--yellow); }
+  .node-card.idle::before   { background:var(--green); }
+  .node-card.offline::before{ background:var(--red); }
+  .node-name { font-weight:800; font-size:13px; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+  .node-meta { font-family:var(--font-mono); font-size:10px; color:var(--muted); line-height:1.8; }
+  .node-meta b { color:var(--text); }
+  .status-badge {
+    font-family:var(--font-mono); font-size:9px; font-weight:700;
+    padding:2px 6px; letter-spacing:0.08em; text-transform:uppercase;
+  }
+  .badge-idle    { color:var(--green);  border:1px solid var(--green); }
+  .badge-busy    { color:var(--yellow); border:1px solid var(--yellow); }
+  .badge-offline { color:var(--red);    border:1px solid var(--red); }
+  .green-tag { font-size:9px; color:var(--green); font-family:var(--font-mono); }
+
+  /* ── Task List ── */
+  .task-list { display:flex; flex-direction:column; gap:6px; max-height:340px; overflow-y:auto; }
+  .task-list::-webkit-scrollbar { width:4px; }
+  .task-list::-webkit-scrollbar-track { background:var(--surface); }
+  .task-list::-webkit-scrollbar-thumb { background:var(--border); }
+  .task-item {
+    display:grid; grid-template-columns:70px 1fr 80px 70px 60px;
+    align-items:center; gap:8px;
+    background:var(--surface); border:1px solid var(--border);
+    padding:8px 12px; font-family:var(--font-mono); font-size:11px;
+    animation:slide-in 0.3s ease;
+  }
+  @keyframes slide-in { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+  .task-id { color:var(--accent); font-weight:700; }
+  .task-type { color:var(--text); }
+  .task-node { color:var(--muted); font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .task-priority { text-align:center; }
+  .prio-rt   { color:var(--red);    border:1px solid var(--red);    padding:1px 5px; font-size:9px; }
+  .prio-batch{ color:var(--muted);  border:1px solid var(--border); padding:1px 5px; font-size:9px; }
+  .task-status { text-align:right; }
+  .s-pending   { color:var(--muted); }
+  .s-running   { color:var(--yellow); animation:flicker 0.8s infinite; }
+  .s-completed { color:var(--green); }
+  .s-failed    { color:var(--red); }
+  @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* ── Queue Viz ── */
+  .queue-viz { display:flex; gap:6px; flex-wrap:wrap; min-height:40px; align-items:center; }
+  .queue-pill {
+    font-family:var(--font-mono); font-size:10px;
+    padding:4px 10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text);
+    animation:pop-in 0.2s ease;
+  }
+  @keyframes pop-in { from{transform:scale(0.8);opacity:0} to{transform:scale(1);opacity:1} }
+  .queue-pill.realtime { border-color:var(--red); color:var(--red); }
+  .queue-empty { color:var(--muted); font-family:var(--font-mono); font-size:11px; }
+
+  /* ── Log ── */
+  .log-box {
+    background:var(--surface); border:1px solid var(--border);
+    padding:12px; font-family:var(--font-mono); font-size:11px;
+    max-height:120px; overflow-y:auto; line-height:1.8;
+  }
+  .log-box::-webkit-scrollbar { width:4px; }
+  .log-box::-webkit-scrollbar-thumb { background:var(--border); }
+  .log-entry { display:flex; gap:10px; }
+  .log-time  { color:var(--muted); flex-shrink:0; }
+  .log-msg.info    { color:var(--accent); }
+  .log-msg.success { color:var(--green); }
+  .log-msg.warn    { color:var(--yellow); }
+  .log-msg.error   { color:var(--red); }
+
+  /* ── Auto mode ── */
+  .auto-bar {
+    background:var(--panel); border:1px solid var(--border);
+    padding:14px 18px; display:flex; align-items:center; gap:12px;
+    flex-wrap:wrap; margin-bottom:16px;
+  }
+  .auto-label { font-family:var(--font-mono); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+
+  /* ── WS status ── */
+  .ws-status { display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:10px; }
+  .ws-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background 0.3s; }
+  .ws-dot.connected    { background:var(--green); }
+  .ws-dot.reconnecting { background:var(--yellow); animation:blink 0.6s infinite; }
+  .ws-dot.disconnected { background:var(--red); }
+
+  @media(max-width:900px) {
+    .main-grid { grid-template-columns:1fr; }
+    .stats-row { grid-template-columns:repeat(3,1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-mark">V</div>
+      <div class="logo-text"><span>Helios</span> &nbsp;/&nbsp; Compute Scheduler</div>
+    </div>
+    <div class="header-status">
+      <div class="live-dot"></div>
+      LIVE &nbsp;|&nbsp; <span id="hdr-time">--:--:--</span>
+      &nbsp;|&nbsp;
+      <div class="ws-status">
+        <div class="ws-dot disconnected" id="ws-dot"></div>
+        <span id="ws-label" style="color:var(--muted)">WS</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">Total Tasks</div><div class="stat-value accent" id="s-total">0</div></div>
+    <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value green" id="s-done">0</div></div>
+    <div class="stat-card"><div class="stat-label">Running</div><div class="stat-value yellow" id="s-run">0</div></div>
+    <div class="stat-card"><div class="stat-label">Failed / Retried</div><div class="stat-value red" id="s-fail">0</div></div>
+    <div class="stat-card"><div class="stat-label">Active Nodes</div><div class="stat-value accent" id="s-nodes">0</div></div>
+  </div>
+
+  <!-- Auto Mode Bar -->
+  <div class="auto-bar">
+    <span class="auto-label">Auto Mode</span>
+    <button class="btn btn-green btn-sm" onclick="startAuto()">▶ Start Simulation</button>
+    <button class="btn btn-red btn-sm" onclick="stopAuto()">■ Stop</button>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)" id="auto-status">Idle — click Start to auto-spawn nodes and tasks</span>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="main-grid">
+
+    <!-- Register Node -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Register Node</span>
+      </div>
+      <div class="panel-body">
+        <div class="form-row">
+          <input id="node-name" placeholder="Node name (e.g. node-berlin-01)" style="flex:1;min-width:160px"/>
+          <input id="node-vram" placeholder="VRAM GB" type="number" min="1" max="80" style="width:90px"/>
+        </div>
+        <div class="form-row">
+          <label class="checkbox-row"><input type="checkbox" id="node-green"/> 🌿 Green energy node (+30% reward)</label>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-accent" onclick="registerNode()">Register Node</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit Task -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Submit Task</span>
+      </div>
+      <div class="panel-body">
+        <div class="form-row">
+          <select id="task-type" style="flex:1">
+            <option value="text-generation">text-generation</option>
+            <option value="embedding">embedding</option>
+            <option value="reranking">reranking</option>
+            <option value="summarization">summarization</option>
+            <option value="classification">classification</option>
+          </select>
+          <select id="task-priority" style="width:100px">
+            <option value="batch">batch</option>
+            <option value="realtime">realtime</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <input id="task-payload" placeholder="Payload / prompt text" style="flex:1"/>
+          <input id="task-budget" placeholder="Budget" type="number" step="0.1" min="0.1" value="1.0" style="width:80px"/>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-accent" onclick="submitTask()">Submit Task</button>
+          <button class="btn btn-green btn-sm" onclick="pullAll()">⚡ Pull All Nodes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nodes -->
+    <div class="panel full-width">
+      <div class="panel-header">
+        <span class="panel-title">GPU Nodes</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)" id="node-count">0 nodes</span>
+      </div>
+      <div class="panel-body">
+        <div class="nodes-grid" id="nodes-grid">
+          <div style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No nodes registered yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Task Queue</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)" id="queue-len">0 pending</span>
+      </div>
+      <div class="panel-body">
+        <div class="queue-viz" id="queue-viz">
+          <span class="queue-empty">Queue empty</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Task Log</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <div class="task-list" id="task-list"></div>
+      </div>
+    </div>
+
+    <!-- System Log -->
+    <div class="panel full-width">
+      <div class="panel-header">
+        <span class="panel-title">System Log</span>
+        <button class="btn btn-sm" style="border-color:var(--muted);color:var(--muted)" onclick="clearLog()">Clear</button>
+      </div>
+      <div class="panel-body" style="padding:8px">
+        <div class="log-box" id="log-box"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let autoTimer = null;
+let knownNodes = [];
+
+// ── Logging ──────────────────────────────────────────────────────
+function log(msg, type='info') {
+  const box = document.getElementById('log-box');
+  const now = new Date().toLocaleTimeString('en-GB');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${type}">${msg}</span>`;
+  box.prepend(entry);
+  if (box.children.length > 60) box.removeChild(box.lastChild);
+}
+function clearLog() { document.getElementById('log-box').innerHTML = ''; }
+
+// ── API helpers ──────────────────────────────────────────────────
+async function api(method, path, body) {
+  try {
+    const res = await fetch(API + path, {
+      method,
+      headers: {'Content-Type':'application/json'},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return await res.json();
+  } catch(e) {
+    log(`API error: ${e.message}`, 'error');
+    return null;
+  }
+}
+
+// ── Actions ──────────────────────────────────────────────────────
+async function registerNode() {
+  const name  = document.getElementById('node-name').value.trim() || `node-${Math.random().toString(36).slice(2,6)}`;
+  const vram  = parseFloat(document.getElementById('node-vram').value) || 8;
+  const green = document.getElementById('node-green').checked;
+  const res = await api('POST','/nodes/register',{name,vram_gb:vram,green_energy:green});
+  if (res) {
+    log(`Node registered: ${name} (${vram}GB VRAM${green?' 🌿':''}) → ID ${res.node_id}`, 'success');
+    document.getElementById('node-name').value = '';
+  }
+}
+
+async function submitTask() {
+  const task_type = document.getElementById('task-type').value;
+  const priority  = document.getElementById('task-priority').value;
+  const payload   = document.getElementById('task-payload').value.trim() || 'sample input';
+  const budget    = parseFloat(document.getElementById('task-budget').value) || 1.0;
+  const res = await api('POST','/tasks/submit',{task_type,priority,budget,payload});
+  if (res) log(`Task submitted: [${priority.toUpperCase()}] ${task_type} → ID ${res.task_id}`, priority==='realtime'?'warn':'info');
+}
+
+async function pullAll() {
+  const nodes = await api('GET','/nodes');
+  if (!nodes) return;
+  const idle = nodes.filter(n => n.status === 'idle');
+  if (!idle.length) { log('No idle nodes to pull tasks.', 'warn'); return; }
+  for (const n of idle) {
+    const res = await api('POST','/nodes/pull',{node_id: n.node_id});
+    if (res?.task_id) log(`Node ${n.name} pulled task ${res.task_id} (${res.task.task_type})`, 'success');
+    else log(`Node ${n.name}: no suitable task available.`, 'info');
+  }
+}
+
+// ── Auto Simulation ──────────────────────────────────────────────
+const DEMO_NODES = [
+  {name:'node-alpha-01', vram_gb:16, green_energy:true},
+  {name:'node-beta-02',  vram_gb:8,  green_energy:false},
+  {name:'node-gamma-03', vram_gb:4,  green_energy:true},
+  {name:'node-delta-04', vram_gb:24, green_energy:false},
+];
+const DEMO_TASKS = [
+  {task_type:'text-generation', priority:'batch',    budget:2.0, payload:'Explain transformer attention'},
+  {task_type:'embedding',       priority:'batch',    budget:0.5, payload:'Encode document chunk #42'},
+  {task_type:'reranking',       priority:'realtime', budget:1.5, payload:'Rerank top-10 candidates'},
+  {task_type:'summarization',   priority:'batch',    budget:1.0, payload:'Summarize technical manual'},
+  {task_type:'classification',  priority:'realtime', budget:0.3, payload:'Classify intent query'},
+];
+
+async function startAuto() {
+  if (autoTimer) return;
+  log('Auto simulation started.', 'success');
+  document.getElementById('auto-status').textContent = 'Running — auto-spawning nodes and tasks every few seconds';
+
+  // Seed nodes
+  for (const n of DEMO_NODES) {
+    await api('POST','/nodes/register', n);
+    await sleep(300);
+  }
+
+  let tick = 0;
+  autoTimer = setInterval(async () => {
+    tick++;
+    // Submit random tasks
+    const t = DEMO_TASKS[tick % DEMO_TASKS.length];
+    await api('POST','/tasks/submit', {...t, payload:`${t.payload} (tick ${tick})`});
+
+    // Pull on all idle nodes
+    const nodes = await api('GET','/nodes');
+    if (nodes) {
+      for (const n of nodes.filter(nd => nd.status==='idle')) {
+        await api('POST','/nodes/pull',{node_id:n.node_id});
+      }
+    }
+  }, 2500);
+}
+
+function stopAuto() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  document.getElementById('auto-status').textContent = 'Stopped.';
+  log('Auto simulation stopped.', 'warn');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Render ───────────────────────────────────────────────────────
+function statusClass(s) {
+  if (s==='completed') return 's-completed';
+  if (s==='running')   return 's-running';
+  if (s==='failed')    return 's-failed';
+  return 's-pending';
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────
+let ws = null;
+let wsReconnectTimer = null;
+
+function setWsStatus(status) {
+  const dot = document.getElementById('ws-dot');
+  const lbl = document.getElementById('ws-label');
+  dot.className = `ws-dot ${status}`;
+  const labels = {connected:'LIVE', reconnecting:'RECONNECTING…', disconnected:'OFFLINE'};
+  lbl.textContent = labels[status] || status;
+  lbl.style.color = status === 'connected' ? 'var(--green)' : status === 'reconnecting' ? 'var(--yellow)' : 'var(--red)';
+}
+
+function connectWS() {
+  if (ws) { ws.onclose = null; ws.close(); }
+  setWsStatus('reconnecting');
+  ws = new WebSocket('ws://localhost:8000/ws');
+
+  ws.onopen = () => {
+    setWsStatus('connected');
+    log('WebSocket connected — live push enabled.', 'success');
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    // Keep-alive ping every 20s
+    ws._pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+    }, 20000);
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'state') renderState(data);
+    } catch(e) { /* ignore non-JSON */ }
+  };
+
+  ws.onerror = () => setWsStatus('disconnected');
+
+  ws.onclose = () => {
+    setWsStatus('disconnected');
+    clearInterval(ws._pingInterval);
+    log('WebSocket disconnected. Reconnecting in 3s…', 'warn');
+    wsReconnectTimer = setTimeout(connectWS, 3000);
+  };
+}
+
+// ── Render from WS state ──────────────────────────────────────────
+function renderState(data) {
+  const { stats, nodes, tasks, queue, server_time } = data;
+  const now = server_time || (Date.now() / 1000);
+
+  // Stats
+  document.getElementById('s-total').textContent = stats.total_tasks;
+  document.getElementById('s-done').textContent  = stats.completed;
+  document.getElementById('s-run').textContent   = stats.running;
+  document.getElementById('s-fail').textContent  = stats.failed;
+  document.getElementById('s-nodes').textContent = `${stats.active_nodes}/${stats.total_nodes}`;
+
+  // Nodes
+  const ng = document.getElementById('nodes-grid');
+  document.getElementById('node-count').textContent = `${nodes.length} node${nodes.length!==1?'s':''}`;
+  if (!nodes.length) {
+    ng.innerHTML = '<div style="color:var(--muted);font-family:var(--font-mono);font-size:11px">No nodes registered yet.</div>';
+  } else {
+    ng.innerHTML = nodes.map(n => {
+      const ago = n.last_seen ? Math.round(now - n.last_seen) : '?';
+      const hbColor = ago > 8 ? 'var(--red)' : ago > 4 ? 'var(--yellow)' : 'var(--green)';
+      return `
+      <div class="node-card ${n.status}">
+        <div class="node-name">
+          ${n.name}
+          ${n.green_energy ? '<span class="green-tag">🌿</span>' : ''}
+        </div>
+        <div class="node-meta">
+          <div>VRAM &nbsp;<b>${n.vram_gb} GB</b></div>
+          <div>Done &nbsp;<b>${n.tasks_completed}</b> &nbsp;|&nbsp; Earned &nbsp;<b>${n.bsai_earned} BSAI</b></div>
+          <div>Task &nbsp;<b>${n.current_task || '—'}</b></div>
+          <div style="color:${hbColor}">♥ last seen &nbsp;<b>${ago}s ago</b></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+          <span class="status-badge badge-${n.status}">${n.status}</span>
+          ${n.status==='offline' ? `<button class="btn btn-sm" style="border-color:var(--muted);color:var(--muted)" onclick="resetNode('${n.node_id}')">Reset</button>` : ''}
+        </div>
+      </div>`
+    }).join('');
+  }
+
+  // Queue
+  const qv = document.getElementById('queue-viz');
+  document.getElementById('queue-len').textContent = `${queue.queue_length} pending`;
+  if (!queue.pending_ids.length) {
+    qv.innerHTML = '<span class="queue-empty">Queue empty</span>';
+  } else {
+    qv.innerHTML = queue.pending_ids.map(tid => {
+      const t = (tasks||[]).find(x=>x.task_id===tid);
+      const prio = t?.priority === 'realtime' ? 'realtime' : '';
+      return `<div class="queue-pill ${prio}">${tid}${t?' · '+t.task_type:''}</div>`;
+    }).join('');
+  }
+
+  // Task list (recent 30, newest first)
+  const tl = document.getElementById('task-list');
+  const recent = [...(tasks||[])].reverse().slice(0,30);
+  tl.innerHTML = recent.map(t => `
+    <div class="task-item">
+      <span class="task-id">#${t.task_id}</span>
+      <span class="task-type">${t.task_type}</span>
+      <span class="task-node">${t.assigned_node ? '→ '+t.assigned_node : '—'}</span>
+      <span class="task-priority"><span class="${t.priority==='realtime'?'prio-rt':'prio-batch'}">${t.priority}</span></span>
+      <span class="task-status ${statusClass(t.status)}">${t.status}</span>
+    </div>
+  `).join('');
+}
+
+async function resetNode(id) {
+  await api('DELETE',`/nodes/${id}/reset`);
+  log(`Node ${id} reset to idle.`, 'warn');
+}
+
+// ── Boot ─────────────────────────────────────────────────────────
+// Clock
+setInterval(() => {
+  document.getElementById('hdr-time').textContent = new Date().toLocaleTimeString('en-GB');
+}, 1000);
+
+connectWS();
+log('Helios Scheduler dashboard initialized.', 'info');
+</script>
+</body>
+</html>
