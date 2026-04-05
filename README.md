@@ -70,7 +70,7 @@ The scheduler supports five task categories: `text-generation`, `summarization`,
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/helios-scheduler.git
+git clone https://github.com/vishva24/helios-scheduler.git
 cd helios-scheduler
 
 # 2. Install dependencies
@@ -90,15 +90,15 @@ uvicorn main:app --reload --port 8000
 
 ```
 helios-scheduler/
-├── backend/
-│   └── main.py          # FastAPI scheduler, WebSocket, watchdog
-├── frontend/
-│   └── index.html       # Live dashboard (vanilla HTML/CSS/JS)
+├── main.py          # FastAPI scheduler, WebSocket, watchdog 
+│  
+├── index.html       # Live dashboard (vanilla HTML/CSS/JS)
+│   
 ├── requirements.txt
 └── README.md
 ```
 
-> **To run:** start `backend/main.py` with uvicorn, then open `frontend/index.html` directly in your browser.
+> **To run:** start `main.py` with uvicorn, then open `index.html` directly in your browser.
 
 ---
 
